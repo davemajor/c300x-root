@@ -1,0 +1,26 @@
+--- a/drivers/mmc/mmc.c	2026-11-18 10:28:26
++++ b/drivers/mmc/mmc.c	2026-11-18 10:28:27
+@@ -627,6 +627,10 @@
+ 			(mmc->ocr & OCR_ACCESS_MODE);
+ 
+ 	err = mmc_send_cmd(mmc, &cmd, NULL);
++#ifndef CONFIG_SPL_BUILD
++	printf("DBG mmc: CMD1 arg=%08x err=%d resp=%08x\n", cmd.cmdarg, err,
++	       err ? 0 : cmd.response[0]);
++#endif
+ 	if (err)
+ 		return err;
+ 	mmc->ocr = cmd.response[0];
+--- a/drivers/mmc/fsl_esdhc.c	2026-11-18 10:28:26
++++ b/drivers/mmc/fsl_esdhc.c	2026-11-18 10:28:27
+@@ -455,6 +455,10 @@
+ 		;
+ 
+ 	irqstat = esdhc_read32(&regs->irqstat);
++#ifndef CONFIG_SPL_BUILD
++	printf("DBG esdhc: CMD%d arg=%08x irqstat=%08x prsstat=%08x\n",
++	       cmd->cmdidx, cmd->cmdarg, irqstat, esdhc_read32(&regs->prsstat));
++#endif
+ 
+ 	if (irqstat & CMD_ERR) {
+ 		err = -ECOMM;
