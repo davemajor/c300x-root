@@ -1,4 +1,4 @@
-# BTicino Classe 300X (344642): recovering and rooting firmware 2.0.2 over UART + i.MX6 SDP
+# BTicino Classe 300X (344642): recovering and rooting firmware (2.0.2 & 3.0.6) over UART + i.MX6 SDP
 
 ## ⚠️ Disclaimer: read this first
 
@@ -128,19 +128,31 @@ unit boots the new p6.
 
 - **Stock recovery:** extract `btweb_only.ext4` (the 1 GiB *normal* rootfs, not the recovery one) from
   your own firmware and write it as-is. This returns the unit to factory behaviour.
-- **Rooted:** You could flash whatever you wanted (I haven't tried rolling back to older versions but it seems reasonable). I built the most minimal rooted image with a new root password and `dropbear` enabled [`rootfs-mod/make-minimal-mod.sh`](rootfs-mod/make-minimal-mod.sh).
-  It works entirely offline (no mount, no root, uses `debugfs`) and only: sets a root password,
-  autostarts dropbear (SSH), and adds a late-restart hook. Everything else stays byte-identical.
+- **Rooted:** [`rootfs-mod/make-minimal-mod.sh`](rootfs-mod/make-minimal-mod.sh) builds a minimally
+  modified rooted image. It works entirely offline (no mount, no root, uses `debugfs`), auto-detects
+  the firmware (**2.0.2 or 3.0.6**), and makes only three changes — everything else stays byte-identical:
+    1. sets a root password (hash method matched to stock: `$6$` on 2.0.2, `$5$` on 3.0.6);
+    2. installs an **independent SSH daemon** (`/etc/init.d/c300x-ssh`) with its own pidfile, a watchdog,
+       and persistent host keys on p7. The firmware's `bt_daemon` stops the *factory* dropbear a few
+       minutes after boot (it treats SSH as disabled unless `<abil_ssh>` is set in its config); this
+       separate instance has its own pidfile so that stop can't touch it. It also generates an ECDSA
+       host key, so modern SSH clients connect without legacy options;
+    3. disables the firmware auto-updater (`SmartToolHLS`) by blanking `WebDispatcher=` and setting
+       `autoInstall=0` — otherwise the unit silently pulls and installs a new firmware (which overwrites
+       p6 and undoes your mods; this happened to me overnight).
   ```sh
   rootfs-mod/make-minimal-mod.sh btweb_only.ext4.gz mod.ext4 --password 'choose-a-strong-one'
+  # flags: --no-ssh, --keep-updates, --json-dir <CPython2.7 Lib/json> (for the HA integration, 2.0.2)
   ```
 
 ### After it boots (rooted image)
 
-- UART login as `root`; SSH needs legacy options for dropbear 2017.75:
-  `ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa root@<ip>`.
+- UART login as `root`. SSH works with a plain `ssh root@<ip>` (the `c300x-ssh` daemon offers an ECDSA
+  host key). The host key persists on p7, so your client won't warn after a reboot.
 - The root filesystem is **read-only** at runtime: `mount -o remount,rw /` to edit, then back to `ro`.
-- **Keep the unit off the internet** so it can't auto-update and overwrite p6.
+- The script already disables the auto-updater, but **keeping the unit off the internet** is still the
+  safest belt-and-braces against a firmware that overwrites p6.
+
 
 ---
 
@@ -155,5 +167,4 @@ No pressure, and no part of this guide is gated behind it. I'm down one device f
 ---
 
 *Not affiliated with BTicino, Legrand, NXP, or Home Assistant. Names and trademarks belong to their
-respective owners. Provided as-is, for interoperability and repair of hardware you own.*
-p2 / p3. So a unit whose **p6 
+respective owners. Provided as-is, for interoperability and repair of hardware you own.* 
